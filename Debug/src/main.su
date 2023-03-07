@@ -1,0 +1,13 @@
+core_cm4.h:1037:22:NVIC_SetPriorityGrouping	24	static
+main.c:59:5:main	32	static
+main.c:103:13:adcInit	40	static
+main.c:132:13:gpioInit	16	static
+main.c:154:17:getADC	8	static
+main.c:166:13:TrafficFlowAdjustment	24	static
+main.c:181:13:TrafficGenerator	48	static
+main.c:207:13:LightState	32	static
+main.c:274:13:SystemDisplay	48	static
+main.c:350:6:vApplicationMallocFailedHook	4	static
+main.c:364:6:vApplicationStackOverflowHook	16	static
+main.c:378:6:vApplicationIdleHook	16	static
+main.c:400:13:prvSetupHardware	8	static
