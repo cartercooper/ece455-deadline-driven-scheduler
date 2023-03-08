@@ -145,7 +145,7 @@ void create_dd_task(TaskHandle_t t_handle, task_type_t type, uint32_t task_id)
 			.completion_time = 0
 	};
 
-	xQueueSend(activeTaskQueueHandle, &taskToCreate, (TickType_t) 0);
+	xQueueSend(activeTaskQueueHandle, &taskToCreate, (TickType_t) 10);
 	vTaskResume(deadlineDrivenScheduler_FTASK);
 }
 
@@ -163,7 +163,8 @@ static void deadlineDrivenScheduler_FTASK( void *pvParameters )
 		int i = 0;
 		int minIndex = 0;
 
-		while( (xQueueReceive(activeTaskQueueHandle, &tempTask, (TickType_t) 0)) && (i < 10))
+
+		while( (xQueueReceive(activeTaskQueueHandle, &tempTask, (TickType_t) 10)) && (i < 10))
 		{
 			tasksToRun[i] = tempTask;
 			i++;
@@ -184,14 +185,12 @@ static void deadlineDrivenScheduler_FTASK( void *pvParameters )
 		{
 			if(k != minIndex)
 			{
-				xQueueSend(activeTaskQueueHandle, &tasksToRun[k], (TickType_t) 0);
+				xQueueSend(activeTaskQueueHandle, &tasksToRun[k], (TickType_t) 10);
 			}
 		}
 
 		vTaskResume(minTask.t_handle);
-
 		vTaskSuspend(NULL);
-//		vTaskDelay(100);
 	}
 }
 
@@ -294,7 +293,7 @@ static void DDT_GEN_3_FTASK( void *pvParameters )
 			PRIORITY_UNSCHEDULED,
 			&(handle_DDT_RUN_3_FTASK)
 		);
-//
+
 		vTaskSuspend(handle_DDT_RUN_3_FTASK);
 
 		create_dd_task(handle_DDT_RUN_3_FTASK, PERIODIC, (uint32_t) 3);
