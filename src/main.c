@@ -1,12 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include "stm32f4_discovery.h"
 
 #include "stm32f4xx.h"
-#include "stm32f4xx_gpio.h"
-#include "stm32f4xx_adc.h"
-
 #include "../FreeRTOS_Source/include/FreeRTOS.h"
 #include "../FreeRTOS_Source/include/queue.h"
 #include "../FreeRTOS_Source/include/semphr.h"
@@ -14,336 +10,308 @@
 #include "../FreeRTOS_Source/include/timers.h"
 
 
+//TEST BENCH 1
+#define TASK1_PERIOD (500 / portTICK_RATE_MS)
+#define TASK2_PERIOD (500 / portTICK_RATE_MS)
+#define TASK3_PERIOD (750 / portTICK_RATE_MS)
+#define TASK1_EXEC (95)
+#define TASK2_EXEC (150)
+#define TASK3_EXEC (250)
 
-/*-----------------------------------------------------------*/
-#define mainQUEUE_LENGTH 100
+//TEST BENCH 2
+//#define TASK1_PERIOD (250 / portTICK_RATE_MS)
+//#define TASK2_PERIOD (500 / portTICK_RATE_MS)
+//#define TASK3_PERIOD (750 / portTICK_RATE_MS)
+//#define TASK1_EXEC (95 / portTICK_RATE_MS)
+//#define TASK2_EXEC (150 / portTICK_RATE_MS)
+//#define TASK3_EXEC (250 / portTICK_RATE_MS)
 
-#define ADC_PIN GPIO_Pin_3
-#define RED_PIN GPIO_Pin_0
-#define YELLOW_PIN GPIO_Pin_1
-#define GREEN_PIN GPIO_Pin_2
-#define DATA_PIN GPIO_Pin_6
-#define CLOCK_PIN GPIO_Pin_7
-#define RESET_PIN GPIO_Pin_8
-
-#define RED_STATE 0x01
-#define YELLOW_STATE 0x02
-#define GREEN_STATE 0x03
+//TEST BENCH 3
+//#define TASK1_PERIOD (500 / portTICK_RATE_MS)
+//#define TASK2_PERIOD (500 / portTICK_RATE_MS)
+//#define TASK3_PERIOD (500 / portTICK_RATE_MS)
+//#define TASK1_EXEC (100 / portTICK_RATE_MS)
+//#define TASK2_EXEC (200 / portTICK_RATE_MS)
+//#define TASK3_EXEC (200 / portTICK_RATE_MS)
 
 
 
-/*
- * TODO: Implement this function for any hardware specific clock configuration
- * that was not already performed before main() was called.
- */
+#define PRIORITY_UNSCHEDULED 1
+#define PRIORITY_SCHEDULED 2
+
+#define PRIORITY_SCHEDULER (configMAX_PRIORITIES - 1)
+#define PRIORITY_MONITOR (configMAX_PRIORITIES - 2)
+#define PRIORITY_GENERATOR (configMAX_PRIORITIES - 3)
+
+#define mainQUEUE_LENGTH 10
+
+#define orange  0
+#define green  	1
+#define red  	2
+#define blue  	3
+
+#define orange_led	LED3
+#define green_led	LED4
+#define red_led		LED5
+#define blue_led	LED6
+
+typedef enum {PERIODIC,APERIODIC} task_type_t;
+
+typedef struct {
+	TaskHandle_t t_handle;
+	task_type_t type;
+	uint32_t task_id;
+	uint32_t release_time;
+	uint32_t absolute_deadline;
+	uint32_t completion_time;
+} dd_task_t;
+
+typedef struct {
+	dd_task_t task;
+	struct dd_task_list *next_task;
+} dd_task_list_t;
+
 static void prvSetupHardware( void );
 
-static void TrafficFlowAdjustment( void *pvParameters );
-static void TrafficGenerator( void *pvParameters );
-static void LightState( void *pvParameters );
-static void SystemDisplay( TimerHandle_t xTimer );
-static void adcInit(void);
-static void gpioInit(void);
-static uint16_t getADC(void);
+static void deadlineDrivenScheduler_FTASK( void *pvParameters );
+static void monitorTask_FTASK( void *pvParameters );
 
-SemaphoreHandle_t trafficLightMutex;
-uint8_t trafficLight = RED_STATE;
+static void DDT_GEN_1_FTASK( void *pvParameters );
+static void DDT_RUN_1_FTASK( void *pvParameters );
 
-QueueHandle_t trafficOutputQueue, potValueQueue, trafficLightQueue;
+static void DDT_GEN_2_FTASK( void *pvParameters );
+static void DDT_RUN_2_FTASK( void *pvParameters );
 
-TimerHandle_t trafficLightTimer;
+static void DDT_GEN_3_FTASK( void *pvParameters );
+static void DDT_RUN_3_FTASK( void *pvParameters );
+
+
+void create_dd_task
+(
+	TaskHandle_t t_handle,
+	task_type_t type,
+	uint32_t task_id
+);
+
+void delete_dd_task(uint32_t task_id);
+dd_task_list_t** get_active_dd_task_list(void);
+dd_task_list_t** get_complete_dd_task_list(void);
+dd_task_list_t** get_overdue_dd_task_list(void);
+
+xQueueHandle activeTaskQueueHandle = 0;
+xQueueHandle completedTaskQueueHandle = 0;
+xQueueHandle overdueTaskQueueHandle = 0;
 
 
 /*-----------------------------------------------------------*/
 
 int main(void)
 {
-	/* Configure the system ready to run the demo.  The clock configuration
-	can be done here if it was not done before main() was called. */
 	prvSetupHardware();
 
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+	activeTaskQueueHandle = xQueueCreate( 	mainQUEUE_LENGTH, sizeof( dd_task_t ) );
+	vQueueAddToRegistry( activeTaskQueueHandle, "ActiveTasks" );
 
-	adcInit();
-	gpioInit();
+	completedTaskQueueHandle = xQueueCreate( 	mainQUEUE_LENGTH, sizeof( dd_task_t ) );
+	vQueueAddToRegistry( completedTaskQueueHandle, "CompletedTasks" );
 
-	trafficOutputQueue = xQueueCreate(1,sizeof(uint32_t));
-	potValueQueue = xQueueCreate(1,sizeof(uint32_t));
+	overdueTaskQueueHandle = xQueueCreate( 	mainQUEUE_LENGTH, sizeof( dd_task_t ) );
+	vQueueAddToRegistry( overdueTaskQueueHandle, "OverdueTasks" );
 
-	uint32_t initialTraffic = 0xAAAAAAAA;
-	xQueueSend(trafficOutputQueue, &initialTraffic, (TickType_t) 10 );
+	xTaskCreate( deadlineDrivenScheduler_FTASK, "DDS", configMINIMAL_STACK_SIZE, NULL, PRIORITY_SCHEDULER, NULL);
+	xTaskCreate( monitorTask_FTASK, "MT", configMINIMAL_STACK_SIZE, NULL, PRIORITY_MONITOR, NULL);
 
-	trafficLightTimer = xTimerCreate(
-			"trafficLightTimer",
-			pdMS_TO_TICKS(1000),
-			pdTRUE,
-			(void*)0,
-			LightState
-	);
+	xTaskCreate( DDT_GEN_1_FTASK, "DDTG1", configMINIMAL_STACK_SIZE, NULL, PRIORITY_GENERATOR, NULL);
+	xTaskCreate( DDT_GEN_2_FTASK, "DDTG2", configMINIMAL_STACK_SIZE, NULL, PRIORITY_GENERATOR, NULL);
+	xTaskCreate( DDT_GEN_3_FTASK, "DDTG3", configMINIMAL_STACK_SIZE, NULL, PRIORITY_GENERATOR, NULL);
 
-	xTimerStart(trafficLightTimer, portMAX_DELAY);
-
-	trafficLightMutex = xSemaphoreCreateMutex();
-	xSemaphoreGive(trafficLightMutex);
-
-	xTaskCreate( TrafficFlowAdjustment, "Traffic Flow", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-	xTaskCreate( TrafficGenerator, "Traffic Generator", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-	xTaskCreate( SystemDisplay, "System Display", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-
-	/* Start the tasks and timer running. */
 	vTaskStartScheduler();
 
 	return 0;
 }
 
+void create_dd_task(TaskHandle_t t_handle, task_type_t type, uint32_t task_id)
+{
+
+	TickType_t currentTicks = xTaskGetTickCount();
+
+	dd_task_t taskToCreate =
+	{
+			.t_handle = t_handle,
+			.type = type,
+			.task_id = task_id,
+			.release_time = currentTicks,
+			.absolute_deadline = currentTicks + TASK1_PERIOD,
+			.completion_time = 0
+	};
+
+	xQueueSend(activeTaskQueueHandle, &taskToCreate, (TickType_t) 0);
+	vTaskResume(deadlineDrivenScheduler_FTASK);
+}
+
 
 /*-----------------------------------------------------------*/
 
-static void adcInit(void)
+static void deadlineDrivenScheduler_FTASK( void *pvParameters )
 {
-
-	GPIO_InitTypeDef gpioInit =
-	{
-			.GPIO_Pin = ADC_PIN,
-			.GPIO_Mode = GPIO_Mode_AN,
-			.GPIO_Speed = GPIO_Speed_100MHz,
-			.GPIO_OType = GPIO_OType_PP,
-			.GPIO_PuPd = GPIO_PuPd_NOPULL
-	};
-
-	GPIO_Init(GPIOC, &gpioInit);
-
-	ADC_InitTypeDef adcInit =
-	{
-			.ADC_Resolution = ADC_Resolution_10b,
-			.ADC_ContinuousConvMode = ENABLE,
-			.ADC_DataAlign = ADC_DataAlign_Right
-	};
-
-	ADC_Init(ADC1, &adcInit);
-
-	ADC_Cmd(ADC1, ENABLE);
-
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_13, 0x00000001, ADC_SampleTime_15Cycles);
-
-}
-
-static void gpioInit(void)
-{
-
-	GPIO_InitTypeDef gpioInit =
-	{
-			.GPIO_Pin = RED_PIN |
-						YELLOW_PIN |
-						GREEN_PIN |
-						DATA_PIN |
-						CLOCK_PIN |
-						RESET_PIN,
-			.GPIO_Mode = GPIO_Mode_OUT,
-			.GPIO_Speed = GPIO_Speed_100MHz,
-			.GPIO_OType = GPIO_OType_PP,
-			.GPIO_PuPd = GPIO_PuPd_NOPULL
-
-	};
-
-	GPIO_Init(GPIOC, &gpioInit);
-
-}
-
-static uint16_t getADC(void)
-{
-	ADC_SoftwareStartConv(ADC1);
-
-	while(!ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC))
-	{
-		vTaskDelay(100);
-	}
-
-	return ADC_GetConversionValue(ADC1);
-}
-
-static void TrafficFlowAdjustment( void *pvParameters )
-{
-	uint16_t rawADC;
 	while(1)
 	{
-		rawADC = getADC();
+		dd_task_t tasksToRun[mainQUEUE_LENGTH];
+		dd_task_t tempTask;
+		dd_task_t minTask;
 
-		xQueueSend(potValueQueue, &rawADC, (TickType_t) 10);
+		int i = 0;
+		int minIndex = 0;
 
+		while( (xQueueReceive(activeTaskQueueHandle, &tempTask, (TickType_t) 0)) && (i < 10))
+		{
+			tasksToRun[i] = tempTask;
+			i++;
+		}
+
+		minTask = tempTask;
+
+		for(int j = 0; j < i; j++)
+		{
+			if(tasksToRun[j].absolute_deadline < minTask.absolute_deadline)
+			{
+				minTask = tasksToRun[j];
+				minIndex = j;
+			}
+		}
+
+		for(int k = 0; k < i; k++)
+		{
+			if(k != minIndex)
+			{
+				xQueueSend(activeTaskQueueHandle, &tasksToRun[k], (TickType_t) 0);
+			}
+		}
+
+		vTaskResume(minTask.t_handle);
+
+		vTaskSuspend(NULL);
+//		vTaskDelay(100);
+	}
+}
+
+/*-----------------------------------------------------------*/
+
+static void monitorTask_FTASK( void *pvParameters )
+{
+	while(1)
+	{
 		vTaskDelay(100 / portTICK_RATE_MS);
 	}
 }
 
 /*-----------------------------------------------------------*/
 
-static void TrafficGenerator( void *pvParameters )
+static void DDT_GEN_1_FTASK( void *pvParameters )
 {
 	while(1)
 	{
-		uint16_t tempADC;
-		xQueueReceive(potValueQueue, &tempADC, (TickType_t) 10);
+		TaskHandle_t handle_DDT_RUN_1_FTASK;
 
-		int flowRate = (int) ( 6500 - (5.5 * tempADC) );
-		float tempRand = (rand() % 6 ) * 50;
+		xTaskCreate
+		(
+			DDT_RUN_1_FTASK,
+			"RUN1",
+			configMINIMAL_STACK_SIZE,
+			NULL,
+			PRIORITY_UNSCHEDULED,
+			&(handle_DDT_RUN_1_FTASK)
+		);
 
-		int generationDelay = (int)flowRate + tempRand;
+		vTaskSuspend(handle_DDT_RUN_1_FTASK);
 
-		printf("%d \n", generationDelay);
+		create_dd_task(handle_DDT_RUN_1_FTASK, PERIODIC, (uint32_t) 1);
 
-		vTaskDelay(generationDelay / portTICK_RATE_MS);
-
-		uint32_t tempTrafficOutput;
-		xQueueReceive(trafficOutputQueue, &tempTrafficOutput, (TickType_t) 10);
-		tempTrafficOutput |= 0x0001;
-		xQueueSend(trafficOutputQueue, &tempTrafficOutput, (TickType_t) 10);
+		vTaskDelay(TASK1_PERIOD);
 	}
 }
 
-
-/*-----------------------------------------------------------*/
-
-static void LightState( TimerHandle_t xTimer )
+static void DDT_RUN_1_FTASK( void *pvParameters )
 {
 	while(1)
 	{
-		uint8_t tempState;
-
-		xSemaphoreTake(trafficLightMutex, portMAX_DELAY);
-		tempState = trafficLight;
-		xSemaphoreGive(trafficLightMutex);
-
-
-
-		uint16_t tempADC;
-		xQueueReceive(potValueQueue, &tempADC, (TickType_t) 10);
-
-		int flowRate = (int) ( 7500 - (5 * tempADC) );
-		int inverseFlowRate = (int) ( 2500 + (5 * tempADC) );
-
-		printf("%d, %d \n", flowRate, inverseFlowRate);
-
-		switch (tempState)
-		{
-			case(RED_STATE):
-
-				GPIO_ResetBits(GPIOC, RED_PIN | YELLOW_PIN | GREEN_PIN);
-				GPIO_SetBits(GPIOC, RED_PIN);
-				vTaskDelay( flowRate / portTICK_RATE_MS);
-
-				xSemaphoreTake(trafficLightMutex, portMAX_DELAY);
-				trafficLight = GREEN_STATE;
-				xSemaphoreGive(trafficLightMutex);
-
-				break;
-
-			case(YELLOW_STATE):
-
-				GPIO_ResetBits(GPIOC, RED_PIN | YELLOW_PIN | GREEN_PIN);
-				GPIO_SetBits(GPIOC, YELLOW_PIN);
-
-				vTaskDelay(2000 / portTICK_RATE_MS);
-
-				xSemaphoreTake(trafficLightMutex, portMAX_DELAY);
-				trafficLight = RED_STATE;
-				xSemaphoreGive(trafficLightMutex);
-
-				break;
-
-			case(GREEN_STATE):
-
-				GPIO_ResetBits(GPIOC, RED_PIN | YELLOW_PIN | GREEN_PIN);
-				GPIO_SetBits(GPIOC, GREEN_PIN);
-				vTaskDelay(inverseFlowRate / portTICK_RATE_MS);
-
-				xSemaphoreTake(trafficLightMutex, portMAX_DELAY);
-				trafficLight = YELLOW_STATE;
-				xSemaphoreGive(trafficLightMutex);
-
-				break;
-
-			default:
-				break;
-		}
+		STM_EVAL_LEDToggle(green_led);
+		vTaskDelay(TASK1_EXEC);
+		vTaskDelete(NULL);
 	}
 }
 
 /*-----------------------------------------------------------*/
 
-static void SystemDisplay( void *pvParameters )
+static void DDT_GEN_2_FTASK( void *pvParameters )
 {
 	while(1)
 	{
-		GPIO_ResetBits(GPIOC, RESET_PIN);
-		vTaskDelay(1 / portTICK_RATE_MS);
-		GPIO_SetBits(GPIOC, RESET_PIN);
+		TaskHandle_t handle_DDT_RUN_2_FTASK;
 
-		uint32_t trafficOutput;
-		xQueueReceive(trafficOutputQueue, &trafficOutput, (TickType_t) 10);
+		xTaskCreate
+		(
+			DDT_RUN_2_FTASK,
+			"RUN2",
+			configMINIMAL_STACK_SIZE,
+			NULL,
+			PRIORITY_UNSCHEDULED,
+			&(handle_DDT_RUN_2_FTASK)
+		);
 
-		for(int i = 0; i < 20; i++)
-		{
-			GPIO_SetBits(GPIOC, CLOCK_PIN);
+		vTaskSuspend(handle_DDT_RUN_2_FTASK);
 
-			if(trafficOutput & (0x00000001 << i))
-			{
-				GPIO_SetBits(GPIOC, DATA_PIN);
-			}
-			else
-			{
-				GPIO_ResetBits(GPIOC, DATA_PIN);
-			}
+		create_dd_task(handle_DDT_RUN_2_FTASK, PERIODIC, (uint32_t) 2);
 
-			GPIO_ResetBits(GPIOC, CLOCK_PIN);
-		}
-		GPIO_ResetBits(GPIOC, DATA_PIN);
-
-		uint8_t tempState;
-		xSemaphoreTake(trafficLightMutex, portMAX_DELAY);
-		tempState = trafficLight;
-		xSemaphoreGive(trafficLightMutex);
-
-		if(tempState == GREEN_STATE)
-		{
-
-			trafficOutput = trafficOutput << 1;
-			xQueueSend(trafficOutputQueue, &trafficOutput, (TickType_t) 10);
-
-		}
-		else
-		{
-
-			uint32_t postLight = trafficOutput & 0xFFFFFF00;
-			uint8_t lights = trafficOutput & 0xFF;
-
-			uint8_t result, mask, bits_to_shift = 0x00;
-			int n = 0;
-			for(int j = 7; j >= 0; j--)
-			{
-				if((lights & (0x01 << j)) == 0)
-				{
-					n = j;
-					break;
-				}
-			}
-
-			mask = (0x01 << n) - 1; // create mask for n least significant bits
-			bits_to_shift = lights & mask; // isolate n least significant bits
-			bits_to_shift <<= 1; // shift bits left by n positions
-			result = bits_to_shift | (lights & ~mask); // combine shifted bits with n-1 most significant bits
-
-			lights = result;
-
-			trafficOutput = (postLight << 1) | lights;
-
-			xQueueSend(trafficOutputQueue, &trafficOutput, (TickType_t) 10);
-
-		}
-		vTaskDelay(1000);
+		vTaskDelay(TASK2_PERIOD);
 	}
 }
 
+static void DDT_RUN_2_FTASK( void *pvParameters )
+{
+	while(1)
+	{
+		STM_EVAL_LEDToggle(red_led);
+		vTaskDelay(TASK2_EXEC);
+		vTaskDelete(NULL);
+	}
+}
+
+/*-----------------------------------------------------------*/
+
+static void DDT_GEN_3_FTASK( void *pvParameters )
+{
+	while(1)
+	{
+		TaskHandle_t handle_DDT_RUN_3_FTASK;
+
+		xTaskCreate
+		(
+			DDT_RUN_3_FTASK,
+			"RUN3",
+			configMINIMAL_STACK_SIZE,
+			NULL,
+			PRIORITY_UNSCHEDULED,
+			&(handle_DDT_RUN_3_FTASK)
+		);
+//
+		vTaskSuspend(handle_DDT_RUN_3_FTASK);
+
+		create_dd_task(handle_DDT_RUN_3_FTASK, PERIODIC, (uint32_t) 3);
+
+		vTaskDelay(TASK3_PERIOD);
+	}
+}
+
+static void DDT_RUN_3_FTASK( void *pvParameters )
+{
+	while(1)
+	{
+		STM_EVAL_LEDToggle(blue_led);
+		vTaskDelay(TASK3_EXEC);
+		vTaskDelete(NULL);
+	}
+}
 
 /*-----------------------------------------------------------*/
 
@@ -399,6 +367,11 @@ volatile size_t xFreeStackSpace;
 
 static void prvSetupHardware( void )
 {
+	STM_EVAL_LEDInit(orange_led);
+	STM_EVAL_LEDInit(green_led);
+	STM_EVAL_LEDInit(red_led);
+	STM_EVAL_LEDInit(blue_led);
+
 	/* Ensure all priority bits are assigned as preemption priority bits.
 	http://www.freertos.org/RTOS-Cortex-M3-M4.html */
 	NVIC_SetPriorityGrouping( 0 );
