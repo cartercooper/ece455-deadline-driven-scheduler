@@ -1,3 +1,5 @@
+round 1:
+
 T1 R T: 0
 T2 R T: 0
 T3 R T: 0
@@ -15,3 +17,28 @@ T2 C T: 1160
 T3 R T: 1500
 T1 R T: 1500
 T2 R T: 1500
+
+
+round 2:
+
+T1 R T: 0
+T2 R T: 0
+T3 R T: 0
+T1 C T: 105
+T1 R T: 250
+T2 C T: 265
+T1 C T: 355
+T2 R T: 500
+T1 R T: 500
+T1 C T: 605
+T3 R T: 750
+T1 R T: 750
+T1 C T: 855
+T2 R T: 1000
+T1 R T: 1000
+T1 C T: 1105
+T1 R T: 1250
+T1 C T: 1355
+T3 R T: 1500
+T2 R T: 1500
+T1 R T: 1500
