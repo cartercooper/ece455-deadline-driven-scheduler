@@ -1,33 +1,42 @@
-round 1:
+Round One:
 T1 R T: 0
 T2 R T: 0
 T3 R T: 0
-AT: 1
+AT: 3
+AT: 3
 T1 C T: 105
-AT: 1
+AT: 2
+AT: 2
 T2 C T: 265
 AT: 1
-T1 R T: 500
-T2 R T: 500
+AT: 1
 T3 C T: 525
-T2 C T: 660
+T1 R T: 525
+T2 R T: 525
+AT: 2
+AT: 2
+T2 C T: 685
+AT: 1
 AT: 1
 T3 R T: 750
-T1 R T: 1001
-T2 R T: 1001
 T3 C T: 1010
 AT: 1
-T2 C T: 1161
 AT: 1
-AT: 1
-AT: 1
-AT: 1
+T1 R T: 1025
+T2 R T: 1025
+T2 C T: 1185
+AT: 2
+AT: 2
+AT: 2
+AT: 2
+AT: 2
+AT: 2
+AT: 2
+AT: 2
 T3 R T: 1500
-T1 R T: 1502
-T2 R T: 1502
-T2 C T: 1662
-AT: 1
-
+T3 C T: 1760
+T1 R T: 1760
+T2 R T: 1760
 
 round 2:
 
