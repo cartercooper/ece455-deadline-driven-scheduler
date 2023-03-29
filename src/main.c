@@ -11,20 +11,20 @@
 
 
 //TEST BENCH 1
-#define TASK1_PERIOD (500)
-#define TASK2_PERIOD (500)
-#define TASK3_PERIOD (750)
-#define TASK1_EXEC (95)
-#define TASK2_EXEC (150)
-#define TASK3_EXEC (250)
-
-//TEST BENCH 2
-//#define TASK1_PERIOD (250)
+//#define TASK1_PERIOD (500)
 //#define TASK2_PERIOD (500)
 //#define TASK3_PERIOD (750)
 //#define TASK1_EXEC (95)
 //#define TASK2_EXEC (150)
 //#define TASK3_EXEC (250)
+
+//TEST BENCH 2
+#define TASK1_PERIOD (250)
+#define TASK2_PERIOD (500)
+#define TASK3_PERIOD (750)
+#define TASK1_EXEC (95)
+#define TASK2_EXEC (150)
+#define TASK3_EXEC (250)
 
 //TEST BENCH 3
 //#define TASK1_PERIOD (500)
@@ -40,12 +40,12 @@
 #define PRIORITY_SCHEDULED 2
 
 #define PRIORITY_SCHEDULER (4)
-#define PRIORITY_MONITOR (2)
+#define PRIORITY_MONITOR (1)
 #define PRIORITY_GENERATOR (3)
 
 #define mainQUEUE_LENGTH 10
 
-#define WAIT_FOR_QUEUE 10
+#define WAIT_FOR_QUEUE 1
 
 #define orange  0
 #define green  	1
@@ -122,6 +122,10 @@ xQueueHandle completedTaskQueueHandle = 0;
 xQueueHandle overdueTaskQueueHandle = 0;
 xQueueHandle runningTaskQueueHandle = 0;
 
+volatile int activeTasks = 0;
+volatile int overdueTasks = 0;
+volatile int completedTasks = 0;
+
 
 /*-----------------------------------------------------------*/
 
@@ -184,6 +188,8 @@ void create_dd_task(task_type_t type, uint32_t absolute_deadline, uint32_t task_
 
 	xQueueSend(activeTaskQueueHandle, &taskToCreate, (TickType_t) WAIT_FOR_QUEUE);
 
+	activeTasks++;
+
 	vTaskResume(handle_deadlineDrivenScheduler_FTASK);
 }
 
@@ -206,19 +212,20 @@ static void deadlineDrivenScheduler_FTASK( void *pvParameters )
 
 		while( (xQueueReceive(activeTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE)) && (i < mainQUEUE_LENGTH))
 		{
-//			if(tempTask.absolute_deadline < currentTicks)
-//			{
-//				xQueueSend(overdueTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE);
-//			}
-//			else
-//			{
+			if(tempTask.absolute_deadline < currentTicks)
+			{
+				overdueTasks++;
+				xQueueSend(overdueTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE);
+			}
+			else
+			{
 				tasksToRun[i] = tempTask;
-//			}
+			}
 			i++;
 		}
 
 		minTask = tempTask;
-
+		minIndex = i;
 		for(int j = 0; j < i; j++)
 		{
 			if(tasksToRun[j].absolute_deadline < minTask.absolute_deadline)
@@ -239,8 +246,6 @@ static void deadlineDrivenScheduler_FTASK( void *pvParameters )
 
 		vTaskPrioritySet(minTask.t_handle, PRIORITY_SCHEDULED);
 
-//		xQueueSend(runningTaskQueueHandle, &minTask, (TickType_t) WAIT_FOR_QUEUE);
-
 		vTaskResume(minTask.t_handle);
 
 		vTaskSuspend(NULL);
@@ -253,11 +258,20 @@ static void monitorTask_FTASK( void *pvParameters )
 {
 	while(1)
 	{
-		int activeTasks = uxQueueMessagesWaiting(activeTaskQueueHandle);
-		if(activeTasks > 2)
-		{
-			vTaskResume(handle_deadlineDrivenScheduler_FTASK);
-		}
+		int lastActiveTasks = 0;
+
+//		if(activeTasks != lastActiveTasks)
+//		{
+//			printf("AT: %d\n", activeTasks);
+//			lastActiveTasks = activeTasks;
+//		}
+//		printf("Active Tasks: %d\n", activeTasks);
+//		printf("Overdue Tasks: %d\n", overdueTasks);
+//		printf("Completed Tasks: %d\n", completedTasks);
+//		if(activeTasks > 1)
+//		{
+//			vTaskResume(handle_deadlineDrivenScheduler_FTASK);
+//		}
 
 //		dd_task_t overdueTask;
 //		while(xQueueReceive(overdueTaskQueueHandle, &overdueTask, (TickType_t) WAIT_FOR_QUEUE))
@@ -273,7 +287,7 @@ static void monitorTask_FTASK( void *pvParameters )
 //			vTaskDelete(completedTask.t_handle);
 //		}
 
-		vTaskDelay(50 / portTICK_RATE_MS);
+		vTaskDelay(1500 / portTICK_RATE_MS);
 	}
 }
 
@@ -284,7 +298,7 @@ static void DDT_GEN_1_FTASK( void *pvParameters )
 	while(1)
 	{
 		TickType_t currentTicks = xTaskGetTickCount();
-		printf("T1 R T: %d\n", (int)currentTicks);
+		//printf("T1 R T: %d\n", (int)currentTicks);
 		create_dd_task(PERIODIC, TASK1_PERIOD, (uint32_t) 1);
 
 		vTaskDelay(TASK1_PERIOD);
@@ -299,21 +313,12 @@ static void DDT_RUN_1_FTASK( void *pvParameters )
 
 		TickType_t currentTicks = xTaskGetTickCount();
 
-
-
 		while(xTaskGetTickCount() < (currentTicks + TASK1_EXEC));
 		currentTicks = xTaskGetTickCount();
-		printf("T1 C T: %d\n", (int)currentTicks);
-//		vTaskDelay(currentTicks + TASK1_EXEC);
-//		dd_task_t tempTask;
-
-//		if(xQueueReceive(runningTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE))
-//		{
-//			tempTask.completion_time = xTaskGetTickCount();
-//			xQueueSend(completedTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE);
-//		}
-//		vTaskSuspend(NULL);
+		printf("T1 Completion Time: %d\n", (int)currentTicks);
 		vTaskResume(handle_deadlineDrivenScheduler_FTASK);
+		activeTasks--;
+		completedTasks++;
 		vTaskDelete(NULL);
 	}
 }
@@ -325,7 +330,7 @@ static void DDT_GEN_2_FTASK( void *pvParameters )
 	while(1)
 	{
 		TickType_t currentTicks = xTaskGetTickCount();
-		printf("T2 R T: %d\n", (int)currentTicks);
+//		printf("T2 R T: %d\n", (int)currentTicks);
 		create_dd_task(PERIODIC, TASK2_PERIOD, (uint32_t) 2);
 
 		vTaskDelay(TASK2_PERIOD);
@@ -340,21 +345,13 @@ static void DDT_RUN_2_FTASK( void *pvParameters )
 
 		TickType_t currentTicks = xTaskGetTickCount();
 
-//		printf("task2 release: %d\n", (int)currentTicks);
-
 		while(xTaskGetTickCount() < (currentTicks + TASK2_EXEC));
 		currentTicks = xTaskGetTickCount();
-		printf("T2 C T: %d\n", (int)currentTicks);
-//		vTaskDelay(currentTicks + TASK2_EXEC);
-//		dd_task_t tempTask;
-//
-//		if(xQueueReceive(runningTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE))
-//		{
-//			tempTask.completion_time = xTaskGetTickCount();
-//			xQueueSend(completedTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE);
-//		}
-//		vTaskSuspend(NULL);
+		printf("T2 Completion Time: %d\n", (int)currentTicks);
+
 		vTaskResume(handle_deadlineDrivenScheduler_FTASK);
+		activeTasks--;
+		completedTasks++;
 		vTaskDelete(NULL);
 	}
 }
@@ -366,7 +363,7 @@ static void DDT_GEN_3_FTASK( void *pvParameters )
 	while(1)
 	{
 		TickType_t currentTicks = xTaskGetTickCount();
-		printf("T3 R T: %d\n", (int)currentTicks);
+		//printf("T3 R T: %d\n", (int)currentTicks);
 		create_dd_task(PERIODIC, TASK3_PERIOD, (uint32_t) 3);
 
 		vTaskDelay(TASK3_PERIOD);
@@ -383,17 +380,11 @@ static void DDT_RUN_3_FTASK( void *pvParameters )
 
 		while(xTaskGetTickCount() < (currentTicks + TASK3_EXEC));
 		currentTicks = xTaskGetTickCount();
-		printf("T3 C T: %d\n", (int)currentTicks);
-//		vTaskDelay(currentTicks + TASK3_EXEC);
-//		dd_task_t tempTask;
-//
-//		if(xQueueReceive(runningTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE))
-//		{
-//			tempTask.completion_time = xTaskGetTickCount();
-//			xQueueSend(completedTaskQueueHandle, &tempTask, (TickType_t) WAIT_FOR_QUEUE);
-//		}
-//		vTaskSuspend(NULL);
+		printf("T3 Completion Time: %d\n", (int)currentTicks);
+
 		vTaskResume(handle_deadlineDrivenScheduler_FTASK);
+		activeTasks--;
+		completedTasks++;
 		vTaskDelete(NULL);
 	}
 }
