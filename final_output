@@ -1,0 +1,134 @@
+Bench 1:
+
+T1 R: 0
+T2 R: 0
+T3 R: 0
+Active Tasks: 3
+Overdue TT1 C: 96
+asks: 0
+Completed Tasks: 1
+T2 C: 247
+T3 C: 498
+T1 R: 500
+T2 R: 500
+T3 R: 750
+T1 C: 846
+T2 C: 997
+T1 R: 1000
+T2 R: 1000
+T2 C: 1151
+T3 C: 1248
+T3 R: 1500
+T1 R: 1500
+T2 R: 1500
+T1 C: 1596
+Active Tasks: 3
+Overdue Tasks: 2
+Completed Tasks: 8
+T1 R: 2000
+T2 R: 2000
+T1 C: 2096
+T3 R: 2250
+T1 R: 2500
+T2 R: 2500
+T3 C: 2501
+T3 R: 3000
+T1 R: 3000
+T2 R: 3000
+
+-------------------------------------------------------------------------
+
+Bench 2:
+
+T1 R: 0
+T2 R: 0
+T3 R: 0
+Active Tasks: 3
+Overdue TT1 C: 96
+asks: 0
+Completed Tasks: 1
+T2 C: 247
+T1 R: 250
+T1 C: 347
+T3 C: 498
+T2 R: 500
+T1 R: 500
+T2 C: 651
+T1 C: 747
+T3 R: 750
+T1 R: 750
+T2 R: 1000
+T1 R: 1000
+T1 R: 1250
+T3 C: 1251
+T1 C: 1347
+T3 R: 1500
+T2 R: 1500
+T1 R: 1500
+T1 R: 1750
+T3 C: 1751
+Active Tasks: 6
+Overdue Tasks: 11
+Completed Tasks: 9
+T2 R: 2000
+T1 R: 2000
+T2 C: 2153
+T3 R: 2250
+T1 R: 2250
+T2 C: 2403
+T2 R: 2500
+T1 R: 2500
+T3 C: 2658
+T1 R: 2750
+T1 C: 2848
+T3 R: 3000
+T2 R: 3000
+T1 R: 3000
+T1 R: 3250
+T3 C: 3251
+Active Tasks: 12
+Overdue Tasks: 37
+Completed Tasks: 14
+
+-------------------------------------------------------------------------
+
+Bench 3:
+
+T1 R: 0
+T2 R: 0
+T3 R: 0
+Active Tasks: 3
+Overdue TT3 C: 201
+asks: 0
+Completed Tasks: 1
+T1 R: 500
+T2 R: 500
+T3 R: 500
+T1 C: 601
+T1 R: 1000
+T2 R: 1000
+T3 R: 1000
+T1 C: 1101
+T1 R: 1500
+T2 R: 1500
+T3 R: 1500
+T1 C: 1601
+Active Tasks: 8
+Overdue Tasks: 12
+Completed Tasks: 4
+T1 R: 2000
+T2 R: 2000
+T3 R: 2000
+T1 C: 2104
+T2 R: 2500
+T3 R: 2500
+T1 R: 2500
+T2 C: 2705
+T3 R: 3000
+T1 R: 3000
+T2 R: 3000
+T3 C: 3205
+Active Tasks: 14
+Overdue Tasks: 36
+Completed Tasks: 7
+
